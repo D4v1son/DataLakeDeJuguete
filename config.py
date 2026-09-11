@@ -1,6 +1,8 @@
 BUCKET_NAME = "s3-demo-bucket-data-lake"
 REGION = "eu-west-1"
 
+AWS_PROFILE = "boto3-master-user"
+
 ROLE_NAME = "AWSGlueServiceRole-crawler"
 
 GLUE_DATABASE = "datalake_juguete"
