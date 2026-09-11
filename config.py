@@ -11,9 +11,10 @@ CRAWLER_NAME = "crawler-raw-superstore-csv"
 BRONZE_JOB_NAME = "job-raw-to-bronze"
 RAW_TABLE_NAME = "raw"  # confirma que coincide con el nombre real que le puso el crawler
 GLUE_SCRIPTS_PREFIX = "glue-scripts/"
-
+BRONZE_CRAWLER_NAME = "crawler-bronze-superstore"
 
 SILVER_JOB_NAME = "job-bronze-to-silver"
+SILVER_CRAWLER_NAME = "crawler-silver-superstore"
 
 RAW_PREFIX = "raw/"
 BRONZE_PREFIX = "bronze/"

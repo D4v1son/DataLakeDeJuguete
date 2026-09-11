@@ -7,7 +7,7 @@ no tu máquina local.
 
 import sys
 from awsglue.utils import getResolvedOptions # type: ignore
-from pyspark.context import SparkContext
+from pyspark.context import SparkContext # type: ignore
 from awsglue.context import GlueContext # type: ignore
 from awsglue.job import Job # type: ignore
 
