@@ -1,5 +1,5 @@
 BUCKET_NAME = "s3-demo-bucket-data-lake"
-REGION = "eu-west-1"
+REGION = "eu-north-1"
 
 AWS_PROFILE = "boto3-master-user"
 
