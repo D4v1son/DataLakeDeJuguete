@@ -7,14 +7,65 @@ Este es un repositorio cuya finalidad es aprender más sobre data lakes, en part
 
 ```mermaid
 flowchart LR
-    A[CSV local] -->|boto3 upload_raw.py| B[S3: raw/]
-    B -->|Glue Crawler| C[(Glue Data Catalog: raw)]
-    C -->|Glue Job: raw_to_bronze| D[S3: bronze/ Parquet]
-    D -->|Glue Crawler| E[(Glue Data Catalog: bronze)]
-    E -->|Glue Job: bronze_to_silver limpieza| F[S3: silver/ Parquet]
-    F -->|Glue Crawler| G[(Glue Data Catalog: silver)]
-    G -->|Athena CTAS agregación| H[S3: gold/ particionado por Region]
-    H -->|Consultas SQL| I[Athena Query Editor]
+    subgraph Ingesta["Ingesta"]
+        Local[Script local boto3]
+    end
+
+    subgraph S3["S3 Bucket"]
+        Raw[("raw/")]
+        Bronze[("bronze/")]
+        Silver[("silver/")]
+        Gold[("gold/")]
+    end
+
+    subgraph Compute["Procesamiento"]
+        CrawlerRaw[Crawler raw]
+        JobBronze[Job raw_to_bronze]
+        CrawlerBronze[Crawler bronze]
+        JobSilver[Job bronze_to_silver]
+        CrawlerSilver[Crawler silver]
+    end
+
+    subgraph Catalog["Glue Catalog"]
+        DB[(datalake_juguete)]
+    end
+
+    subgraph AthenaGroup["Athena"]
+        Athena[Athena SQL]
+    end
+
+    Local -->|sube CSV| Raw
+
+    Raw --> CrawlerRaw
+    CrawlerRaw -->|escribe tabla| DB
+    DB -->|lee tabla| JobBronze
+    JobBronze --> Bronze
+
+    Bronze --> CrawlerBronze
+    CrawlerBronze -->|escribe tabla| DB
+    DB -->|lee tabla| JobSilver
+    JobSilver --> Silver
+
+    Silver --> CrawlerSilver
+    CrawlerSilver -->|escribe tabla| DB
+    DB -->|lee tabla| Athena
+    Athena -->|CTAS| Gold
+
+    classDef s3style fill:#FFE8CC,stroke:#D9822B,stroke-width:1.5px,color:#5C3A00
+    classDef catalogstyle fill:#D6E8FF,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef computestyle fill:#E3F9E5,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef ingestastyle fill:#F3E8FF,stroke:#805AD5,stroke-width:1.5px,color:#44337A
+
+    class Raw,Bronze,Silver,Gold s3style
+    class DB catalogstyle
+    class CrawlerRaw,JobBronze,CrawlerBronze,JobSilver,CrawlerSilver,Athena computestyle
+    class Local ingestastyle
+
+    style Ingesta fill:transparent,stroke:#805AD5,stroke-width:2px,color:#ffffff,font-weight:bold
+    style S3 fill:transparent,stroke:#D9822B,stroke-width:2px,color:#ffffff,font-weight:bold
+    style Compute fill:transparent,stroke:#2F855A,stroke-width:2px,color:#ffffff,font-weight:bold
+    style Catalog fill:transparent,stroke:#2B6CB0,stroke-width:2px,color:#ffffff,font-weight:bold
+    style AthenaGroup fill:transparent,stroke:#2F855A,stroke-width:2px,color:#ffffff,font-weight:bold
 ```
 
 # Créditos/Licencias
