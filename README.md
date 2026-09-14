@@ -1,3 +1,4 @@
+🌐 Español | [English](README.en.md)
 
 # ¿Qué es el Data Lake de Juguete?
 
@@ -116,9 +117,9 @@ DataLakeDeJuguete/
 - **`scripts/`** son utilidades puntuales del flujo de datos que no encajan como infraestructura ni como transformación Glue (ingesta inicial, consulta final de agregación).
 - **`config.py`** centraliza todos los nombres y valores de recursos (bucket, región, nombres de crawlers/jobs) en un único sitio, para no repetirlos ni tener que buscar y reemplazar en varios archivos si algo cambia.
 
-# Cómo ejecutarlo
+# Cómo Ejecutarlo
 
-### Requisitos previos
+### Requisitos
 
 - Cuenta de AWS con un usuario IAM configurado localmente (perfil en `~/.aws/credentials`, gestionado aquí con la extensión AWS Toolkit para VS Code).
 - El usuario IAM necesita permisos sobre S3, IAM (crear roles), Glue y Athena.
@@ -164,7 +165,7 @@ python scripts\generate_gold_table.py
 
 Cada script imprime su progreso y estado (`[OK]`, `[CREANDO]`, `[EJECUTANDO]`) en la terminal.
 
-# Dataset y configuración
+# Dataset y Configuración
 
 Este proyecto usa el dataset público **Sample Superstore** como ejemplo para validar el pipeline, ya que aún no se dispone de datos reales del proyecto con el cliente.
 
