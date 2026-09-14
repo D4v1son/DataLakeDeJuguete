@@ -2,26 +2,23 @@
 
 
 # ¿What is Data Lake de Juguete (Toy Data Lake)?
-
-Este es un repositorio cuya finalidad es aprender más sobre data lakes, en particular cómo levantar uno mediante los servicios en la nube de Amazon. La escala del data lake propuesto es increíblemente pequeño, de ahí el apodo "de juguete", y carece de aplicación real. Por tanto, sirve como ejemplo de la estructura básica que debería tener un data lake realmente funcional.
+This repository has the end goal to lean more about data lakes, in particular how to set one up with Amazon web services. The proposed data lake's scale is incredibly small, hence the nickname "toy", and lacks real aplication. Therefore, it serves as an exmple of the basic structure that a real functioning data lake should have.
 
 # Arquitecture
+The pipeline follows a layered arquitecture (medallion architecture: raw → bronze → silver → gold), where each layer is automatically catalogued before proceding with the next one.
 
-El pipeline sigue una arquitectura por capas (medallion architecture: raw → bronze → silver → gold), donde cada capa se cataloga automáticamente antes de pasar a la siguiente.
+1. **Ingest**: the local script (`upload_raw.py`) uploads the original CSV to the `raw/` layer inside the S3 bucket, without modifications.
+2. **Catalog**: a Glue Crawler reads each layer and registers it's schema as a table inside the Glue Catalog, this way it can be searched by name instead of an S3 uri.
+3. **Transformation (bronze)**: a Glue Job reads the `raw` table from the catalog and then converts it into parquet format before saving it in `bronze/`.
+4. **Cleaning (silver)**: a second Glue Job reads `bronze`, applies cleaning rules (delete nulls, out of range values and duplicates) then writes it inside `silver/`.
+5. **Aggregation (gold)**: an Athena query (CTAS) aggregates the `silver` data by category and region (in this case, it would be ideal to adapt it to the data we're working with), then writes the partitioned result  in`gold/`, ready to be worked with.
 
-1. **Ingesta**: un script local (`upload_raw.py`) sube el CSV de origen a la capa `raw/` del bucket S3, sin transformar.
-2. **Catalogación**: un Glue Crawler lee cada capa y registra su esquema como tabla en el Glue Catalog, para que pueda consultarse por nombre en lugar de por ruta S3.
-3. **Transformación (bronze)**: un Glue Job lee la tabla `raw` desde el catálogo y la convierte a formato Parquet en `bronze/`.
-4. **Limpieza (silver)**: un segundo Glue Job lee `bronze`, aplica reglas de limpieza (elimina nulos, valores fuera de rango y duplicados) y escribe el resultado en `silver/`.
-5. **Agregación (gold)**: una consulta Athena (CTAS) agrega los datos de `silver` por categoría y región (en este caso, lo ideal es adaptarlo a los datos con los que estemos trabajando), y escribe el resultado particionado en `gold/`, listo para análisis.
-
-Todo el proceso está automatizado con scripts Python (boto3) — no requiere pasos manuales en la consola de AWS.
-
+The process is automated via Python scripts (boto3) - it does not require to take manual steps inside the AWS console.
 
 ```mermaid
 flowchart LR
-    subgraph Ingesta["Ingesta"]
-        Local[Script local boto3]
+    subgraph Ingest["Ingest"]
+        Local[Local script boto3]
     end
 
     subgraph S3["S3 Bucket"]
@@ -47,21 +44,21 @@ flowchart LR
         Athena[Athena SQL]
     end
 
-    Local -->|sube CSV| Raw
+    Local -->|upload CSV| Raw
 
     Raw --> CrawlerRaw
-    CrawlerRaw -->|escribe| DB
-    DB -->|lee| JobBronze
+    CrawlerRaw -->|writes| DB
+    DB -->|reads| JobBronze
     JobBronze --> Bronze
 
     Bronze --> CrawlerBronze
-    CrawlerBronze -->|escribe| DB
-    DB -->|lee| JobSilver
+    CrawlerBronze -->|writes| DB
+    DB -->|reads| JobSilver
     JobSilver --> Silver
 
     Silver --> CrawlerSilver
-    CrawlerSilver -->|escribe| DB
-    DB -->|lee| Athena
+    CrawlerSilver -->|writes| DB
+    DB -->|reads| Athena
     Athena -->|CTAS| Gold
 
     classDef s3style fill:#FFE8CC,stroke:#D9822B,stroke-width:1.5px,color:#5C3A00
@@ -83,48 +80,48 @@ flowchart LR
 
 # AWS Services
 
-- [S3](https://aws.amazon.com/es/s3/) Bucket, almacenamiento por capas de nuestros datos.
-- [Glue](https://aws.amazon.com/es/glue/), catálogo de datos (tablas por capas), crawlers y jobs ETL.
-- [Athena](https://aws.amazon.com/es/athena/), consultas SQL (serverless).
-- [IAM](https://aws.amazon.com/es/iam/), control de permisos y perfiles de trabajo.
+- [S3](https://aws.amazon.com/es/s3/) Bucket, layered storage of our data.
+- [Glue](https://aws.amazon.com/es/glue/), data catalog (table per layer), crawlers and ETL jobs.
+- [Athena](https://aws.amazon.com/es/athena/), SQL queries (serverless).
+- [IAM](https://aws.amazon.com/es/iam/), permissions manager and work profiles.
 
 # Repository Structure
 ```
 DataLakeDeJuguete/
 ├── data/
-│ └── SampleSuperstore.csv # Dataset de ejemplo (Sample Superstore)
+│ └── SampleSuperstore.csv # Example dataset (Sample Superstore)
 ├── infra/
-│ ├── provision_infra.py # Crea el bucket S3, el rol IAM y la base de datos Glue
-│ ├── deploy_crawler.py # Crawler sobre raw/
-│ ├── deploy_bronze_crawler.py # Crawler sobre bronze/
-│ └── deploy_silver_crawler.py # Crawler sobre silver/
+│ ├── provision_infra.py # Creates the S3 bucket, the IAM role and Glue database
+│ ├── deploy_crawler.py # Crawler at raw/
+│ ├── deploy_bronze_crawler.py # Crawler at bronze/
+│ └── deploy_silver_crawler.py # Crawler at silver/
 ├── glue_jobs/
 │ ├── raw_to_bronze.py # Script PySpark: raw (CSV) -> bronze (Parquet)
-│ ├── deploy_bronze_job.py # Sube y ejecuta el Job raw_to_bronze
+│ ├── deploy_bronze_job.py # Uploads and executes the raw_to_bronze Job
 │ ├── bronze_to_silver.py # Script PySpark: bronze -> silver (limpieza)
-│ └── deploy_silver_job.py # Sube y ejecuta el Job bronze_to_silver
+│ └── deploy_silver_job.py # Uploads and executes the bronze_to_silver Job
 ├── scripts/
-│ ├── upload_raw.py # Sube el CSV local a S3 (raw/)
-│ └── generate_gold_table.py # CTAS de Athena: agrega silver -> gold, particionado por Region
-├── config.py # Configuración centralizada (nombres de recursos, región, perfil AWS)
+│ ├── upload_raw.py # Uploads the local CSV to S3 (raw/)
+│ └── generate_gold_table.py # Athena CTAS: aggregate silver -> gold, partitioned by Region
+├── config.py # Centralized configuration (resource names, region, AWS profile)
 ├── requirements.txt
 ├── .gitignore
 └── README.md
 ```
 
-**Por qué esta separación:**
-- **`infra/`** contiene todo lo que crea o actualiza infraestructura (recursos que persisten entre ejecuciones): bucket, rol, catálogo y crawlers.
-- **`glue_jobs/`** agrupa cada transformación en pares: el script PySpark que ejecuta AWS Glue en la nube, y su script de despliegue correspondiente (sube el código a S3 y lanza el job desde tu máquina).
-- **`scripts/`** son utilidades puntuales del flujo de datos que no encajan como infraestructura ni como transformación Glue (ingesta inicial, consulta final de agregación).
-- **`config.py`** centraliza todos los nombres y valores de recursos (bucket, región, nombres de crawlers/jobs) en un único sitio, para no repetirlos ni tener que buscar y reemplazar en varios archivos si algo cambia.
+**Why this separation:**
+- **`infra/`** contains everythong needed to create or update the infraestructure (persistent resources between execitions): bucket, role, catalog and crawlers.
+- **`glue_jobs/`** groups together each transformation pair: PySpark cript thata executes AWS Glue remotely, and its corresponding deployment script (uploads the code to S3 and launches the job from the machine).
+- **`scripts/`** specific pipeline utilities that don't fit  as infraestructure or Glue transformations (inicial ingest, final aggregation query).
+- **`config.py`** centralizes every name and resource value (bucket, region, crawlers/jobs names) inside a single file, this way we don't have to repeat them or look for each instance qhen there's a change.
 
 # Executing the Scrpts
 
 ### Requirements
-
-- Cuenta de AWS con un usuario IAM configurado localmente (perfil en `~/.aws/credentials`, gestionado aquí con la extensión AWS Toolkit para VS Code).
+- AWS account with a local credentials set (profile inside `~/.aws/credentials`, managed in this project by the AWS toolkit for VS Code).
+- The IAM user needs permissions for S3, IAM (role creation), Glue and Athena.
 - El usuario IAM necesita permisos sobre S3, IAM (crear roles), Glue y Athena.
-- Python 3.9+ instalado.
+- Python 3.9+ installed.
 
 ### Installation
 
@@ -136,49 +133,49 @@ pip install -r requirements.txt
 
 ### Execution Steps
 
-Los scripts son idempotentes (se pueden re-ejecutar sin duplicar recursos), pero deben lanzarse en este orden la primera vez:
+The Scripts are idempodent (they can be re-executed without doubling the resources), put the first launch must follow this order.
 
 ```bash
-# 1. Sube el CSV de origen a la capa raw/
+# 1. Upload the original CSV to the raw/ layer
 python scripts\upload_raw.py
 
-# 2. Provisiona bucket, rol IAM y base de datos Glue
+# 2. Provision bucket, IAM role and Glue's database
 python infra\provision_infra.py
 
-# 3. Cataloga raw/
+# 3. Catalogs raw/
 python infra\deploy_crawler.py
 
-# 4. Transforma raw -> bronze (Parquet)
+# 4. Transforms raw -> bronze (Parquet)
 python glue_jobs\deploy_bronze_job.py
 
-# 5. Cataloga bronze/
+# 5. Catalogs bronze/
 python infra\deploy_bronze_crawler.py
 
-# 6. Limpia bronze -> silver
+# 6. Cleans bronze -> silver
 python glue_jobs\deploy_silver_job.py
 
-# 7. Cataloga silver/
+# 7. Catalogs silver/
 python infra\deploy_silver_crawler.py
 
-# 8. Agrega silver -> gold (particionado por Region)
+# 8. Aggregates silver -> gold (partitioned by Region)
 python scripts\generate_gold_table.py
 ```
 
-Cada script imprime su progreso y estado (`[OK]`, `[CREANDO]`, `[EJECUTANDO]`) en la terminal.
+Each script prints its progress and status (`[OK]`, `[CREANDO]`, `[EJECUTANDO]`) in the terminal.
 
 # Dataset y Config
 
-Este proyecto usa el dataset público **Sample Superstore** como ejemplo para validar el pipeline, ya que aún no se dispone de datos reales del proyecto con el cliente.
+This project uses the public dataset **Sample Superstore** as an example to validate the pipeline.
 
-Todos los nombres de recursos (bucket, región, base de datos, crawlers, jobs) están centralizados en `config.py`. Para reproducir este proyecto con otra cuenta de AWS o con un dataset distinto, basta con:
+All resource names (bucket, region, database, crawlers, jobs) are centralized in `config.py`. To reproduce this project with a different AWS account or another dataset, you'll have to:
 
-1. Ajustar los valores en `config.py` (nombre de bucket único, región, nombre del perfil AWS).
-2. Sustituir el CSV en `data/` por el dataset deseado.
-3. Ajustar la consulta de agregación en `scripts/generate_gold_table.py` si las columnas del nuevo dataset difieren de las de Superstore.
+1. Adjust values inside `config.py` (unique bucket name, region, AWS profile name).
+2. Substitute the CSV inside `data/` for the new one.
+3. Adjust aggregation query `scripts/generate_gold_table.py` if the coloms are differ from the ones in Superstore.
 
 # Notes
 
-Como se ha mencionado anteriormente, este es un proyecto de investigación y deja mucho que desear como data lake propiamente dicho. Una versión *real* tendrá datos, que posiblemente se tengan que actulizar con frecuencia, muchos más requisitos de seguridad, y por supuesto una mayor infraestructura (IaC) que facilite el uso y la expansión del data lake.
+As previously mentioned, this is a research/learning project and falls short of what a proper data lake would look like. A *real* version would involve actual data-likely requiring frequent updates—far more stringent security requirements, and of course a more robust infrastructure (IaC) to facilitate the data lake's use and expansion.
 
 # Credits/Licences
 

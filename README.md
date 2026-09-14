@@ -14,7 +14,7 @@ El pipeline sigue una arquitectura por capas (medallion architecture: raw → br
 4. **Limpieza (silver)**: un segundo Glue Job lee `bronze`, aplica reglas de limpieza (elimina nulos, valores fuera de rango y duplicados) y escribe el resultado en `silver/`.
 5. **Agregación (gold)**: una consulta Athena (CTAS) agrega los datos de `silver` por categoría y región (en este caso, lo ideal es adaptarlo a los datos con los que estemos trabajando), y escribe el resultado particionado en `gold/`, listo para análisis.
 
-Todo el proceso está automatizado con scripts Python (boto3) — no requiere pasos manuales en la consola de AWS.
+Todo el proceso está automatizado con scripts Python (boto3) - no requiere pasos manuales en la consola de AWS.
 
 
 ```mermaid
@@ -167,7 +167,7 @@ Cada script imprime su progreso y estado (`[OK]`, `[CREANDO]`, `[EJECUTANDO]`) e
 
 # Dataset y Configuración
 
-Este proyecto usa el dataset público **Sample Superstore** como ejemplo para validar el pipeline, ya que aún no se dispone de datos reales del proyecto con el cliente.
+Este proyecto usa el dataset público **Sample Superstore** como ejemplo para validar el pipeline.
 
 Todos los nombres de recursos (bucket, región, base de datos, crawlers, jobs) están centralizados en `config.py`. Para reproducir este proyecto con otra cuenta de AWS o con un dataset distinto, basta con:
 
