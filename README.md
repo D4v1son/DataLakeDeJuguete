@@ -87,7 +87,7 @@ flowchart LR
 - [IAM](https://aws.amazon.com/es/iam/), control de permisos y perfiles de trabajo.
 
 # Estructura del Repositorio
-
+```
 DataLakeDeJuguete/
 ├── data/
 │ └── SampleSuperstore.csv # Dataset de ejemplo (Sample Superstore)
@@ -108,6 +108,7 @@ DataLakeDeJuguete/
 ├── requirements.txt
 ├── .gitignore
 └── README.md
+```
 
 **Por qué esta separación:**
 - **`infra/`** contiene todo lo que crea o actualiza infraestructura (recursos que persisten entre ejecuciones): bucket, rol, catálogo y crawlers.
