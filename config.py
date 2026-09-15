@@ -1,5 +1,42 @@
-BUCKET_NAME = "s3-demo-bucket-data-lake"
+"""
+Configuración centralizada para los scripts en /scripts y /glue_jobs.
+ 
+IMPORTANTE: estos valores deben coincidir con los definidos en
+infra/infra/infra_stack.py. Si cambias el nombre del proyecto o el
+entorno ahí, actualízalo también aquí.
+"""
+
 REGION = "eu-north-1"
+PROJECT = "datalake-de-juguete"
+ENV_NAME = "dev"
+
+# Nombres derivados (mismo patrón que en infra_stack.py)
+GLUE_DATABASE = f"{PROJECT}_{ENV_NAME}".replace("-", "_")
+
+BUCKETS = {
+    "raw": f"{PROJECT}-raw-{ENV_NAME}",
+    "bronze": f"{PROJECT}-bronze-{ENV_NAME}",
+    "silver": f"{PROJECT}-silver-{ENV_NAME}",
+    "gold": f"{PROJECT}-gold-{ENV_NAME}",
+    "scripts": f"{PROJECT}-scripts-{ENV_NAME}",
+}
+
+CRAWLERS = {
+    "raw": f"{PROJECT}-raw-crawler-{ENV_NAME}",
+    "bronze": f"{PROJECT}-bronze-crawler-{ENV_NAME}",
+    "silver": f"{PROJECT}-silver-crawler-{ENV_NAME}",
+}
+
+JOBS = {
+    "raw_to_bronze": f"{PROJECT}-raw-to-bronze-{ENV_NAME}",
+}
+
+
+
+"""
+Versión antigua (falta region)
+
+BUCKET_NAME = "s3-demo-bucket-data-lake"
 
 AWS_PROFILE = "boto3-master-user"
 
@@ -22,3 +59,4 @@ SILVER_PREFIX = "silver/"
 GOLD_PREFIX = "gold/"
 
 ATHENA_RESULTS_PREFIX = "athena-results/"
+"""

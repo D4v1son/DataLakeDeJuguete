@@ -1,13 +1,39 @@
+"""
+Sube el CSV de origen a la capa raw del data lake.
+Usa las credenciales por defecto de AWS.
+"""
+
+import sys
+import os
+from pathlib import Path
+
 import boto3
+from botocore.exceptions import ClientError
 
-# Selecciona la sesión que usará boto3, en este caso utiliza un usuario IAM con acceso a consola y privilegios RW
-# Si solo se usa una vez lo mejor es hacerlo desde conola, dentro del entorno de trabajo de pythonm de esta forma:
-# $env:AWS_PROFILE="nombre-del-perfil"
-session = boto3.Session(profile_name='boto3-master-user')
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import config
 
-# Vamos a utilizar el servicio de AWS S3 Bucket, donde subiremos el archivo.
-s3 = session.client('s3')
+LOCAL_FILE = Path(__file__).parent.parent / "data" / "SampleSuperstore.csv"
+S3_KEY = "SampleSuperstore.csv"
 
-# Subimos el archivo, OJO, este código solo funciona para un archivo concreto con un path conreto
-# DEBES MODIFICAR ESTO PARA OTROS ARCHIVOS
-s3.upload_file('data/SampleSuperstore.csv', 'david-s3-demo-bucket-data-lake', 'raw/SampleSuperstore.csv')
+session = boto3.Session()
+s3 = session.client("s3", region_name=config.REGION)
+
+
+def upload_file():
+    if not LOCAL_FILE.exists():
+        print(f"[ERROR] No se encuentra el archivo: {LOCAL_FILE}")
+        sys.exit(1)
+
+    bucket_name = config.BUCKETS["raw"]
+    print(f"[SUBIENDO] {LOCAL_FILE.name} -> s3://{bucket_name}/{S3_KEY}")
+    try:
+        s3.upload_file(str(LOCAL_FILE), bucket_name, S3_KEY)
+        print("[OK] Archivo subido correctamente")
+    except ClientError as e:
+        print(f"[ERROR] No se pudo subir el archivo: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    upload_file()
