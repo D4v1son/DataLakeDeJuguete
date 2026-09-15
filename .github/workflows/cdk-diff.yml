@@ -1,0 +1,69 @@
+name: CDK Diff
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "infra/**"
+
+permissions:
+  id-token: write   # necesario para el login OIDC
+  contents: read
+  pull-requests: write   # necesario para comentar en el PR
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar credenciales AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::287785301135:role/datalake-de-juguete-github-actions-dev
+          aws-region: eu-north-1
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar CDK CLI
+        run: npm install -g aws-cdk
+
+      - name: Instalar dependencias del proyecto CDK
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: cdk diff
+        id: diff
+        run: |
+          source .venv/bin/activate
+          cdk diff 2>&1 | tee diff_output.txt
+        continue-on-error: true
+
+      - name: Comentar el diff en el PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const diff = fs.readFileSync('infra/diff_output.txt', 'utf8');
+            const truncated = diff.length > 60000 ? diff.slice(0, 60000) + '\n... (truncado)' : diff;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### CDK Diff\n\`\`\`\n${truncated}\n\`\`\``
+            });

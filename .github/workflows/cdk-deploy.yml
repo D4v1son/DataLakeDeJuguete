@@ -1,0 +1,52 @@
+name: CDK Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+
+permissions:
+  id-token: write   # necesario para el login OIDC
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar credenciales AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::287785301135:role/datalake-de-juguete-github-actions-dev
+          aws-region: eu-north-1
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar CDK CLI
+        run: npm install -g aws-cdk
+
+      - name: Instalar dependencias del proyecto CDK
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: cdk deploy
+        run: |
+          source .venv/bin/activate
+          cdk deploy --require-approval never

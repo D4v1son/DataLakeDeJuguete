@@ -1,6 +1,7 @@
 from aws_cdk import (
     Stack,
     RemovalPolicy,
+    Duration,
     aws_s3 as s3,
     aws_iam as iam,
     aws_glue as glue,
@@ -127,4 +128,45 @@ class InfraStack(Stack):
             glue_version="4.0",
             number_of_workers=2,
             worker_type="G.1X",
+        )
+        
+        # --- Proveedor OIDC de GitHub (permite que GitHub Actions se autentique) ---
+        github_provider = iam.OpenIdConnectProvider(
+            self, "GitHubOidcProvider",
+            url="https://token.actions.githubusercontent.com",
+            client_ids=["sts.amazonaws.com"],
+        )
+
+        # --- Rol que GitHub Actions puede asumir ---
+        github_deploy_role = iam.Role(
+            self, "GitHubActionsDeployRole",
+            role_name=f"{project}-github-actions-{env_name}",
+            assumed_by=iam.WebIdentityPrincipal(
+                github_provider.open_id_connect_provider_arn,
+                conditions={
+                    "StringEquals": {
+                        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+                    },
+                    "StringLike": {
+                        "token.actions.githubusercontent.com:sub":
+                            "repo:D4v1son/DataLakeDeJuguete:*"
+                    },
+                },
+            ),
+            max_session_duration=Duration.hours(1),
+        )
+
+        # Permisos: acceso de administrador sobre CloudFormation (para cdk deploy)
+        # y sobre los servicios que gestionamos. Para un proyecto de juguete,
+        # PowerUserAccess es razonable; en un entorno real se acotaría más.
+        github_deploy_role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name("PowerUserAccess")
+        )
+        # PowerUserAccess no incluye IAM; el pipeline necesita crear/modificar
+        # el rol de Glue, así que añadimos permisos de IAM acotados:
+        github_deploy_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["iam:*"],
+                resources=[glue_role.role_arn],
+            )
         )
