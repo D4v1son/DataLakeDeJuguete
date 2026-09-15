@@ -1,7 +1,7 @@
 """
 Ejecuta una consulta Athena CTAS (CREATE TABLE AS SELECT) que agrega
 la tabla silver por Region y Category, y guarda el resultado particionado
-por Region en la capa gold del bucket.
+por Region en el bucket gold.
 """
 
 import sys
@@ -13,16 +13,15 @@ import boto3
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 
-session = boto3.Session(profile_name=config.AWS_PROFILE)
+session = boto3.Session()
 athena = session.client("athena", region_name=config.REGION)
 s3 = session.client("s3", region_name=config.REGION)
 
-ATHENA_RESULTS_PATH = f"s3://{config.BUCKET_NAME}/{config.ATHENA_RESULTS_PREFIX}"
-GOLD_TABLE_NAME = "gold_ventas_por_region"
-GOLD_OUTPUT_PATH = f"s3://{config.BUCKET_NAME}/{config.GOLD_PREFIX}"
+SILVER_TABLE_NAME = "datalake_de_juguete_silver_dev"
+GOLD_OUTPUT_PATH = f"s3://{config.BUCKETS['gold']}/"
 
 CTAS_QUERY = f"""
-CREATE TABLE {config.GLUE_DATABASE}.{GOLD_TABLE_NAME}
+CREATE TABLE {config.GLUE_DATABASE}.{config.GOLD_TABLE_NAME}
 WITH (
     format = 'PARQUET',
     external_location = '{GOLD_OUTPUT_PATH}',
@@ -37,7 +36,7 @@ SELECT
     SUM(quantity) AS total_quantity,
     COUNT(*) AS num_orders,
     region
-FROM {config.GLUE_DATABASE}.silver
+FROM {config.GLUE_DATABASE}.{SILVER_TABLE_NAME}
 GROUP BY category, "sub-category", segment, region
 """
 
@@ -46,7 +45,7 @@ def run_query(query, description):
     print(f"[EJECUTANDO] {description}")
     response = athena.start_query_execution(
         QueryString=query,
-        ResultConfiguration={"OutputLocation": ATHENA_RESULTS_PATH},
+        ResultConfiguration={"OutputLocation": config.ATHENA_RESULTS_PATH},
     )
     execution_id = response["QueryExecutionId"]
 
@@ -65,11 +64,12 @@ def run_query(query, description):
     return execution_id
 
 
-def empty_gold_prefix():
-    print(f"[LIMPIANDO] Objetos existentes en {GOLD_OUTPUT_PATH}")
+def empty_gold_bucket():
+    bucket = config.BUCKETS["gold"]
+    print(f"[LIMPIANDO] Objetos existentes en s3://{bucket}/")
     paginator = s3.get_paginator("list_objects_v2")
     keys_to_delete = []
-    for page in paginator.paginate(Bucket=config.BUCKET_NAME, Prefix=config.GOLD_PREFIX):
+    for page in paginator.paginate(Bucket=bucket):
         for obj in page.get("Contents", []):
             keys_to_delete.append({"Key": obj["Key"]})
 
@@ -77,26 +77,23 @@ def empty_gold_prefix():
         print("[OK] No había nada que limpiar")
         return
 
-    # delete_objects admite máximo 1000 claves por llamada
     for i in range(0, len(keys_to_delete), 1000):
         batch = keys_to_delete[i : i + 1000]
-        s3.delete_objects(Bucket=config.BUCKET_NAME, Delete={"Objects": batch})
+        s3.delete_objects(Bucket=bucket, Delete={"Objects": batch})
     print(f"[OK] {len(keys_to_delete)} objeto(s) eliminado(s)")
 
 
 if __name__ == "__main__":
-    empty_gold_prefix()
+    empty_gold_bucket()
 
-    # Si la tabla gold ya existe de una ejecución anterior, Athena falla al
-    # crearla de nuevo -> la borramos primero (metadato del catálogo).
     try:
         run_query(
-            f"DROP TABLE IF EXISTS {config.GLUE_DATABASE}.{GOLD_TABLE_NAME}",
+            f"DROP TABLE IF EXISTS {config.GLUE_DATABASE}.{config.GOLD_TABLE_NAME}",
             "Eliminando tabla gold anterior (si existía)",
         )
     except RuntimeError:
         pass
 
     run_query(CTAS_QUERY, "Creando tabla gold agregada y particionada por Region")
-    print(f"\n[LISTO] Tabla '{GOLD_TABLE_NAME}' creada en {config.GLUE_DATABASE}")
+    print(f"\n[LISTO] Tabla '{config.GOLD_TABLE_NAME}' creada en {config.GLUE_DATABASE}")
     print(f"Archivos en: {GOLD_OUTPUT_PATH}")

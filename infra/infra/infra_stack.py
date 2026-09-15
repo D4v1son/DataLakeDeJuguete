@@ -108,3 +108,23 @@ class InfraStack(Stack):
             number_of_workers=2,
             worker_type="G.1X",
         )
+        
+        # --- 8. Glue Job: bronze -> silver ---
+        silver_job = glue.CfnJob(
+            self, "BronzeToSilverJob",
+            name=f"{project}-bronze-to-silver-{env_name}",
+            role=glue_role.role_arn,
+            command=glue.CfnJob.JobCommandProperty(
+                name="glueetl",
+                script_location=f"s3://{scripts_bucket.bucket_name}/bronze_to_silver.py",
+                python_version="3",
+            ),
+            default_arguments={
+                "--database_name": database_name,
+                "--table_name": "datalake_de_juguete_bronze_dev",  # confirmar nombre real
+                "--output_path": f"s3://{self.buckets['silver'].bucket_name}/",
+            },
+            glue_version="4.0",
+            number_of_workers=2,
+            worker_type="G.1X",
+        )

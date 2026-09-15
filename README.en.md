@@ -1,21 +1,22 @@
-[English](README.en.md) | 🌐 [Español](README.md)
-doc version 2.0
+🌐 [Español](README.md) | English
+
+doc version 2.1
 
 # What is the Toy Data Lake?
 
-This repository exists to learn more about data lakes, specifically how to build one using Amazon's cloud services. The scale of the proposed data lake is intentionally tiny, hence the "toy" nickname, and it has no real-world application. It serves as an example of the basic structure a truly functional data lake should have, with the infrastructure fully automated as code (IaC).
+This repository exists to learn more about data lakes, specifically how to build one using Amazon's cloud services, with the infrastructure fully automated as code (IaC). The scale of the proposed data lake is intentionally tiny, hence the "toy" nickname, and it has no real-world application. It serves as an example of the basic structure a truly functional data lake should have.
 
 # Architecture
 
-The pipeline follows a layered architecture (medallion architecture: raw → bronze → silver → gold), where each layer is automatically cataloged before moving to the next. Each layer lives in its own S3 bucket.
+The pipeline follows a layered architecture (medallion architecture: raw → bronze → silver → gold), where each layer is automatically cataloged before moving to the next. Each layer lives in its own S3 bucket, plus there's an additional bucket dedicated to the scripts/assets Glue needs to run its jobs, and to the Athena query results.
 
-1. **Ingestion**: a local script (`upload_raw.py`) uploads the source CSV to the `raw` bucket, untransformed.
-2. **Cataloging**: a Glue Crawler reads each layer and registers its schema as a table in the Glue Catalog, so it can be queried by name instead of by S3 path.
-3. **Transformation (bronze)**: a Glue Job reads the `raw` table from the catalog and converts it to Parquet format in the `bronze` bucket.
-4. **Cleaning (silver)**: a second Glue Job reads `bronze`, applies cleaning rules (removes nulls, out-of-range values, and duplicates), and writes the result to the `silver` bucket.
+1. **Ingestion**: a local script (`upload_raw_csv.py`) uploads the source CSV to the `raw` bucket, untransformed.
+2. **Cataloging**: a Glue Crawler reads each layer (raw, bronze, silver) and registers its schema as a table in the Glue Catalog, so it can be queried by name instead of by S3 path.
+3. **Transformation (bronze)**: the `raw_to_bronze` Glue Job reads the `raw` table from the catalog and converts it to Parquet format in the `bronze` bucket.
+4. **Cleaning (silver)**: the `bronze_to_silver` Glue Job reads `bronze`, applies cleaning rules (removes nulls, out-of-range values, and duplicates), and writes the result to the `silver` bucket.
 5. **Aggregation (gold)**: an Athena query (CTAS) aggregates the `silver` data by category and region, writing the partitioned result to the `gold` bucket, ready for analysis.
 
-The infrastructure (buckets, IAM role, database, and crawlers) is defined declaratively with **AWS CDK** and deployed with `cdk deploy` — no manual steps in the AWS console, and no imperative scripts checking "does this already exist."
+All persistent infrastructure (buckets, IAM role, database, crawlers, and Glue Jobs) is defined declaratively with **AWS CDK** and deployed with `cdk deploy` — no manual steps in the AWS console, and no imperative scripts checking "does this already exist." The scripts in `/scripts` only handle the *execution* side: uploading code/data and triggering processes that the infrastructure has already defined.
 
 ```mermaid
 flowchart LR
@@ -23,11 +24,12 @@ flowchart LR
         Local[Local boto3 script]
     end
 
-    subgraph S3["S3 Buckets (one per layer)"]
+    subgraph S3["S3 Buckets (one per layer + scripts)"]
         Raw[("raw")]
         Bronze[("bronze")]
         Silver[("silver")]
         Gold[("gold")]
+        Scripts[("scripts")]
     end
 
     subgraph Compute["Processing"]
@@ -47,6 +49,9 @@ flowchart LR
     end
 
     Local -->|uploads CSV| Raw
+    Scripts -.->|job code| JobBronze
+    Scripts -.->|job code| JobSilver
+    Scripts -.->|query results| Athena
 
     Raw --> CrawlerRaw
     CrawlerRaw -->|writes| DB
@@ -68,7 +73,7 @@ flowchart LR
     classDef computestyle fill:#E3F9E5,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
     classDef ingestastyle fill:#F3E8FF,stroke:#805AD5,stroke-width:1.5px,color:#44337A
 
-    class Raw,Bronze,Silver,Gold s3style
+    class Raw,Bronze,Silver,Gold,Scripts s3style
     class DB catalogstyle
     class CrawlerRaw,JobBronze,CrawlerBronze,JobSilver,CrawlerSilver,Athena computestyle
     class Local ingestastyle
@@ -82,7 +87,7 @@ flowchart LR
 
 # AWS Services
 
-- [S3](https://aws.amazon.com/s3/), layered storage for our data (one bucket per layer).
+- [S3](https://aws.amazon.com/s3/), layered storage for our data (one bucket per layer, plus one for scripts/assets).
 - [Glue](https://aws.amazon.com/glue/), data catalog (tables per layer), crawlers, and ETL jobs.
 - [Athena](https://aws.amazon.com/athena/), serverless SQL queries.
 - [IAM](https://aws.amazon.com/iam/), permission control and working profiles.
@@ -95,28 +100,30 @@ DataLakeDeJuguete/
 │ └── SampleSuperstore.csv       # Example dataset (Sample Superstore)
 ├── infra/                       # CDK project (infrastructure as code)
 │ ├── infra/
-│ │ └── infra_stack.py           # S3 buckets, IAM role, Glue database and crawlers
+│ │ └── infra_stack.py           # S3 buckets (incl. scripts), IAM role, Glue database, crawlers and Glue Jobs
 │ ├── app.py                     # CDK app entry point
 │ ├── cdk.json
 │ └── requirements.txt
 ├── glue_jobs/
 │ ├── raw_to_bronze.py           # PySpark script: raw (CSV) -> bronze (Parquet)
-│ ├── deploy_bronze_job.py       # Uploads and runs the raw_to_bronze job
-│ ├── bronze_to_silver.py        # PySpark script: bronze -> silver (cleaning)
-│ └── deploy_silver_job.py       # Uploads and runs the bronze_to_silver job
+│ └── bronze_to_silver.py        # PySpark script: bronze -> silver (cleaning)
 ├── scripts/
-│ ├── upload_raw.py              # Uploads the local CSV to S3 (raw bucket)
+│ ├── upload_raw_csv.py          # Uploads the local CSV to S3 (raw bucket)
 │ ├── run_crawlers.py            # Starts one or more crawlers and waits for completion
+│ ├── deploy_bronze_job.py       # Uploads raw_to_bronze.py to the scripts bucket and runs the Job
+│ ├── deploy_silver_job.py       # Uploads bronze_to_silver.py to the scripts bucket and runs the Job
 │ └── generate_gold_table.py     # Athena CTAS: aggregates silver -> gold, partitioned by Region
+├── config.py                    # Shared resource names (must match infra_stack.py)
 ├── requirements.txt
 ├── .gitignore
 └── README.md
 ```
 
 **Why this separation:**
-- **`infra/`** is a self-contained CDK project (with its own virtual environment and dependencies) that declares all persistent infrastructure: buckets, role, catalog, and crawlers. It contains no execution logic, only the definition of the desired state.
-- **`glue_jobs/`** groups each transformation in pairs: the PySpark script that AWS Glue runs in the cloud, and its corresponding deployment script.
-- **`scripts/`** are data-flow and one-off execution utilities (initial ingestion, running crawlers, final aggregation query) that don't fit as declarative infrastructure.
+- **`infra/`** is a self-contained CDK project (with its own virtual environment and dependencies) that declares all persistent infrastructure: buckets, role, catalog, crawlers, and Glue Jobs. It contains no execution logic, only the definition of the desired state.
+- **`glue_jobs/`** contains only the PySpark scripts that AWS Glue runs in the cloud (they don't run on your machine). Their creation and configuration as resources now lives in `infra_stack.py`.
+- **`scripts/`** are execution utilities: they upload data and code to S3, and trigger processes (crawlers, jobs, Athena queries) that the infrastructure has already defined.
+- **`config.py`** centralizes resource names (buckets, database, crawlers, jobs) so execution scripts don't duplicate those values. It must stay in sync with the names generated in `infra_stack.py`.
 
 # How to Run It
 
@@ -157,24 +164,24 @@ cdk bootstrap aws://YOUR_ACCOUNT/YOUR_REGION
 From there, the flow is:
 
 ```bash
-# 1. Deploy all infrastructure (buckets, role, database, crawlers)
+# 1. Deploy all infrastructure (buckets, role, database, crawlers, Glue Jobs)
 cd infra
 cdk deploy
 
 # 2. Upload the source CSV to the raw bucket
-python scripts\upload_raw.py
+python scripts\upload_raw_csv.py
 
 # 3. Catalog raw
 python scripts\run_crawlers.py raw
 
 # 4. Transform raw -> bronze (Parquet)
-python glue_jobs\deploy_bronze_job.py
+python scripts\deploy_bronze_job.py
 
 # 5. Catalog bronze
 python scripts\run_crawlers.py bronze
 
 # 6. Clean bronze -> silver
-python glue_jobs\deploy_silver_job.py
+python scripts\deploy_silver_job.py
 
 # 7. Catalog silver
 python scripts\run_crawlers.py silver
@@ -189,9 +196,9 @@ To review infrastructure changes before applying them, use `cdk diff` instead of
 
 This project uses the public **Sample Superstore** dataset as an example to validate the pipeline.
 
-Resource names (buckets, database, crawlers) are generated from the project name and environment (`dev` by default), defined in `infra_stack.py`. To reproduce this project with a different AWS account or a different dataset:
+Resource names (buckets, database, crawlers, jobs) are generated from the project name and environment (`dev` by default), defined in `infra_stack.py` and mirrored in `config.py`. To reproduce this project with a different AWS account or a different dataset:
 
-1. Adjust the project/environment name in `infra_stack.py` if needed.
+1. Adjust the project/environment name in `infra_stack.py` (and update `config.py` accordingly) if needed.
 2. Replace the CSV in `data/` with the desired dataset.
 3. Adjust the aggregation query in `scripts/generate_gold_table.py` if the new dataset's columns differ from Superstore's.
 

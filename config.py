@@ -29,7 +29,11 @@ CRAWLERS = {
 
 JOBS = {
     "raw_to_bronze": f"{PROJECT}-raw-to-bronze-{ENV_NAME}",
+    "bronze_to_silver": f"{PROJECT}-bronze-to-silver-{ENV_NAME}",
 }
+
+ATHENA_RESULTS_PATH = f"s3://{BUCKETS['scripts']}/athena-results/"
+GOLD_TABLE_NAME = "gold_ventas_por_region"
 
 
 
