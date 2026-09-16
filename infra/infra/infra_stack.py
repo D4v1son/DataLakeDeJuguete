@@ -164,11 +164,22 @@ class InfraStack(Stack):
         )
         # PowerUserAccess no incluye IAM; el pipeline necesita crear/modificar
         # el rol de Glue, así que añadimos permisos de IAM acotados:
-        github_deploy_role.add_to_policy(
-            iam.PolicyStatement(
-                actions=["iam:*"],
-                resources=[glue_role.role_arn],
-            )
+        github_deploy_role = iam.Role(
+            self, "GitHubActionsDeployRole",
+            role_name=f"{project}-github-actions-{env_name}",
+            assumed_by=iam.WebIdentityPrincipal(
+                github_provider.open_id_connect_provider_arn,
+                conditions={
+                    "StringEquals": {
+                        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+                    },
+                    "StringLike": {
+                        "token.actions.githubusercontent.com:sub":
+                            "repo:D4v1son@101944814/DataLakeDeJuguete@1363669655:*"
+                    },
+                },
+            ),
+            max_session_duration=Duration.hours(1),
         )
         
         
